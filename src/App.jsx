@@ -1,21 +1,9 @@
 import { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 
-// Initialize Firebase
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
+import { createClient } from '@supabase/supabase-js'
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const supabase = createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY')
+
 
 function App() {
   const [user, setUser] = useState(null);
@@ -23,46 +11,60 @@ function App() {
   const [newTodo, setNewTodo] = useState('');
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
-      if (user) {
-        const q = query(collection(db, 'todos'), where('userId', '==', user.uid));
-        onSnapshot(q, (querySnapshot) => {
-          const todoList = [];
-          querySnapshot.forEach((doc) => {
-            todoList.push({ id: doc.id, ...doc.data() });
-          });
-          setTodos(todoList);
-        });
+    const unsubscribe = supabase.onAuthStateChanged((event, session) => {
+      console.log(event, session)
+      if (event === 'INITIAL_SESSION') {
+        // handle initial session
+      } else if (event === 'SIGNED_IN') {
+        const fetchTodos = fetchUserTasks(user.id)
+        setTodos(fetchTodos)
+      } else if (event === 'SIGNED_OUT') {
+        // handle sign out event
       }
     });
     return () => unsubscribe();
   }, []);
 
-  const signIn = () => {
-    const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider);
-  };
+  async function fetchUserTasks(userId) {
+    const { data: tasks, error } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', userId);
+  
+    if (error) {
+      console.error('Error fetching tasks:', error);
+      return [];
+    }
+  
+    return tasks;
+  }
 
-  const signOutUser = () => {
-    signOut(auth);
-    setTodos([]);
-  };
+  // Replaced Firebase auth with Supabase auth
+  const signIn = async () => {
+    const { user } = await supabase.auth.signIn({
+      provider: 'google'
+    })
+    setUser(user)
 
-  const addTodo = async (e) => {
-    e.preventDefault();
-    if (newTodo.trim() === '') return;
-    await addDoc(collection(db, 'todos'), {
-      text: newTodo,
-      completed: false,
-      userId: user.uid,
-    });
-    setNewTodo('');
-  };
+  }
 
+  const signOutUser = async () => {
+    const { error } = await supabase.auth.signOut()
+    console.log(error)
+  }
+
+  const addTodo = async (text) => {
+    const { data, error } = await supabase
+      .from('todos')
+      .insert({ text, user_id: user.id });
+  }
+  
   const deleteTodo = async (id) => {
-    await deleteDoc(doc(db, 'todos', id));
-  };
+    const { data, error } = await supabase
+      .from('todos')
+      .delete()
+      .match({ id });
+  }
 
   return (
     <div className="App">
