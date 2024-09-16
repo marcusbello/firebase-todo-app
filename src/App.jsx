@@ -11,19 +11,47 @@ function App() {
   const [newTodo, setNewTodo] = useState('');
 
   useEffect(() => {
-    const unsubscribe = supabase.onAuthStateChanged((event, session) => {
-      console.log(event, session)
-      if (event === 'INITIAL_SESSION') {
-        // handle initial session
-      } else if (event === 'SIGNED_IN') {
-        const fetchTodos = fetchUserTasks(user.id)
+    const loginEvent = async () => {
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(event, session);
+        
+        if (event === 'INITIAL_SESSION') {
+          // handle initial session if needed
+          setUser(null);
+          setTodos([]);
+        } else if (event === 'SIGNED_IN') {
+          setUser(session.user);
+          const fetchTodos = await fetchUserTasks(session.user.id); // use session.user.id
+          setTodos(fetchTodos);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setTodos([]);
+        }
+      });
+  
+      return () => {
+        authListener.subscription.unsubscribe();
+      };
+    }
+
+    loginEvent();
+
+    const checkSession = async () => {
+      const { data: sessionData, error } = await supabase.auth.getSession();
+
+      if (sessionData?.session) {
+        setUser(sessionData.session.user);
+        const fetchTodos = await fetchUserTasks(sessionData.session.user.id)
         setTodos(fetchTodos)
-      } else if (event === 'SIGNED_OUT') {
-        // handle sign out event
+      } else if (error) {
+        console.error('Error fetching session:', error.message);
       }
-    });
-    return () => unsubscribe();
+    };
+
+    checkSession();
+    
   }, []);
+  
 
   async function fetchUserTasks(userId) {
     const { data: tasks, error } = await supabase
@@ -32,7 +60,7 @@ function App() {
       .eq('user_id', userId);
   
     if (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('Error fetching todos:', error);
       return [];
     }
   
@@ -41,11 +69,10 @@ function App() {
 
   // Replaced Firebase auth with Supabase auth
   const signIn = async () => {
-    const { user } = await supabase.auth.signIn({
+    const { user } = await supabase.auth.signInWithOAuth({
       provider: 'google'
     })
     setUser(user)
-
   }
 
   const signOutUser = async () => {
@@ -53,10 +80,31 @@ function App() {
     console.log(error)
   }
 
-  const addTodo = async (text) => {
+  const addTodo = async (e) => {
+    e.preventDefault();
+    if (newTodo.trim() === '') return;
     const { data, error } = await supabase
       .from('todos')
-      .insert({ text, user_id: user.id });
+      .insert({ title:newTodo, user_id: user.id,  completed: false});
+
+    if (error) {
+      console.error(error.message)
+    } else {
+      console.log(data)
+      // After adding a new todo, refetch all todos
+      const { data: todos, error: fetchError } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', user.id);
+
+      if (fetchError) {
+        console.error('Error fetching todos:', fetchError.message);
+      } else {
+        setTodos(todos); // Update the todos state with the latest data
+      }
+
+      setNewTodo('');
+    }
   }
   
   const deleteTodo = async (id) => {
@@ -64,14 +112,31 @@ function App() {
       .from('todos')
       .delete()
       .match({ id });
+
+      if (error) {
+        console.error(error.message)
+      } else {
+        console.log(data)
+        // After adding a new todo, refetch all todos
+        const { data: todos, error: fetchError } = await supabase
+        .from('todos')
+        .select('*')
+        .eq('user_id', user.id);
+  
+        if (fetchError) {
+          console.error('Error fetching todos:', fetchError.message);
+        } else {
+          setTodos(todos); // Update the todos state with the latest data
+        }
+      }
   }
 
   return (
     <div className="App">
-      <h1>Firebase Todo App</h1>
+      <h1>Supabase Todo App</h1>
       {user ? (
         <>
-          <p>Welcome, {user.displayName}!</p>
+          <p>Welcome, {user.user_metadata.full_name || ''}!</p>
           <button onClick={signOutUser}>Sign Out</button>
           <form onSubmit={addTodo}>
             <input
@@ -85,7 +150,7 @@ function App() {
           <ul>
             {todos.map((todo) => (
               <li key={todo.id}>
-                {todo.text}
+                {todo.title}
                 <button onClick={() => deleteTodo(todo.id)}>Delete</button>
               </li>
             ))}
