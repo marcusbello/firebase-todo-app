@@ -13,6 +13,7 @@ const firebaseConfig = {
   appId: "YOUR_APP_ID"
 };
 
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -53,7 +54,7 @@ function App() {
     e.preventDefault();
     if (newTodo.trim() === '') return;
     await addDoc(collection(db, 'todos'), {
-      text: newTodo,
+      title: newTodo,
       completed: false,
       userId: user.uid,
     });
@@ -83,7 +84,7 @@ function App() {
           <ul>
             {todos.map((todo) => (
               <li key={todo.id}>
-                {todo.text}
+                {todo.title}
                 <button onClick={() => deleteTodo(todo.id)}>Delete</button>
               </li>
             ))}

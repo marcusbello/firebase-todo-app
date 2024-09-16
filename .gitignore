@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+.gitignore
+
+src/AppFirebase*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
