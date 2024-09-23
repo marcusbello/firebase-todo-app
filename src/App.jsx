@@ -2,13 +2,19 @@ import { useState, useEffect } from 'react';
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY')
+export const supabase = createClient(
+  'SUPABASE_URL', 
+  'SUPABASE_ANON_KEY');
 
 
 function App() {
   const [user, setUser] = useState(null);
   const [todos, setTodos] = useState([]);
   const [newTodo, setNewTodo] = useState('');
+
+  // login email and password
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     const loginEvent = async () => {
@@ -66,6 +72,26 @@ function App() {
   
     return tasks;
   }
+
+
+  // supabase email and password
+  const handleLoginSubmit = async (event) => {
+    event.preventDefault();
+    console.log('Form submitted');
+
+    try {
+      const { user, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        console.log(error.message);
+      } else {
+        setUser(user)
+      }
+    } catch (error) {
+      console.log(error.message);
+    }
+  };
+
 
   // Replaced Firebase auth with Supabase auth
   const signIn = async () => {
@@ -157,7 +183,30 @@ function App() {
           </ul>
         </>
       ) : (
-        <button onClick={signIn}>Sign In with Google</button>
+      <form onSubmit={handleLoginSubmit}>
+        <label htmlFor="email">Email:</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          autocomplete="username"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+
+        <label htmlFor="password">Password:</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <button type="submit">Sign In</button>
+      </form>
       )}
     </div>
   );
